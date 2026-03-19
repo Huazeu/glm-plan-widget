@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
-import { X, RefreshCw, Cpu, Wrench, Clock, Activity, Settings, Save, BarChart3 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, RefreshCw, Clock, Activity, Settings, Save } from 'lucide-react';
 import { fetchUsageData } from './api';
 import type { UsageData, TimeRange } from './api';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 function App() {
   const [loading, setLoading] = useState(false);

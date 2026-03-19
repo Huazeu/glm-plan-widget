@@ -1,7 +1,7 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge as e, ipcRenderer as t } from "electron";
 //#region electron/preload.ts
-contextBridge.exposeInMainWorld("electron", {
-	closeWindow: () => ipcRenderer.send("close-window"),
-	fetchApi: (url, options) => ipcRenderer.invoke("fetch-api", url, options)
+e.exposeInMainWorld("electron", {
+	closeWindow: () => t.send("close-window"),
+	fetchApi: (e, n) => t.invoke("fetch-api", e, n)
 });
 //#endregion
