@@ -71,8 +71,8 @@ function createTray() {
   
   let icon;
   try {
-    // Try to load an icon if we had one
-    const iconPath = path.join(process.env.VITE_PUBLIC || path.join(__dirname, '../public'), 'vite.svg');
+    // Load the dedicated tray icon
+    const iconPath = path.join(process.env.VITE_PUBLIC || path.join(__dirname, '../public'), 'tray-icon.svg');
     icon = nativeImage.createFromPath(iconPath);
     if (icon.isEmpty()) {
       throw new Error('Icon is empty');
