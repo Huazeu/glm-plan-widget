@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="public/icons.svg" alt="GLM Plan Widget" width="128" height="128" />
+<img src="https://raw.githubusercontent.com/Huazeu/glm-plan-widget/master/public/icons.svg" alt="GLM Plan Widget" width="128" height="128" />
 
 **Zhipu GLM Coding Plan Desktop Widget** — Lightweight, Real-time, Beautiful
 
