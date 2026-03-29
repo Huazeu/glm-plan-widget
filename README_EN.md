@@ -28,7 +28,7 @@
 
 ### Download & Install
 
-Download the latest version from [Releases](https://github.com/YOUR_USERNAME/glm-plan-widget/releases):
+Download the latest version from [Releases](https://github.com/Huazeu/glm-plan-widget/releases):
 
 ```
 GLM_Plan_Widget.exe  # Windows portable (no installation needed)
@@ -40,7 +40,7 @@ GLM_Plan_Widget.exe  # Windows portable (no installation needed)
 
 ```bash
 # Clone the project
-git clone https://github.com/YOUR_USERNAME/glm-plan-widget.git
+git clone https://github.com/Huazeu/glm-plan-widget.git
 cd glm-plan-widget
 
 # Install dependencies

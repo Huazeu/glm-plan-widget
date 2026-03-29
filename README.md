@@ -28,7 +28,7 @@
 
 ### 下载安装
 
-从 [Releases](https://github.com/YOUR_USERNAME/glm-plan-widget/releases) 页面下载最新版本：
+从 [Releases](https://github.com/Huazeu/glm-plan-widget/releases) 页面下载最新版本：
 
 ```
 GLM_Plan_Widget.exe  # Windows 便携版 (无需安装)
@@ -40,7 +40,7 @@ GLM_Plan_Widget.exe  # Windows 便携版 (无需安装)
 
 ```bash
 # 克隆项目
-git clone https://github.com/YOUR_USERNAME/glm-plan-widget.git
+git clone https://github.com/Huazeu/glm-plan-widget.git
 cd glm-plan-widget
 
 # 安装依赖
