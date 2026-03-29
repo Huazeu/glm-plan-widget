@@ -6,20 +6,22 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    strategy:
-      matrix:
-        os: [windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -27,15 +29,31 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Package
-        run: npm run dist
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Package (fix symlink issue on Windows)
+        run: |
+          # Fix electron-builder symlink issue on Windows
+          $cachePath = "$env:LOCALAPPDATA\electron-builder\Cache"
+          if (Test-Path $cachePath) {
+            Write-Host "Clearing electron-builder cache..."
+            Remove-Item -Recurse -Force $cachePath -ErrorAction SilentlyContinue
+          }
+          npm run dist
 
       - name: Upload Release Asset
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: release/*.exe
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Build Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GLM_Plan_Widget-${{ github.ref_name }}
+          path: |
+            release/
+            !release/**/*.pdb
+          retention-days: 30
