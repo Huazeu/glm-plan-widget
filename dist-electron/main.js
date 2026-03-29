@@ -34,7 +34,7 @@ function m() {
 function h() {
 	let e;
 	try {
-		let t = o.join(process.env.VITE_PUBLIC || o.join(c, "../public"), "vite.svg");
+		let t = o.join(process.env.VITE_PUBLIC || o.join(c, "../public"), "tray-icon.svg");
 		if (e = a.createFromPath(t), e.isEmpty()) throw Error("Icon is empty");
 		e = e.resize({
 			width: 16,

@@ -1,9 +1,25 @@
 {
   "name": "glm-plan-widget",
-  "private": true,
   "version": "1.0.0",
+  "description": "智谱 GLM Coding Plan 桌面小部件 - 通过 Bearer Token 实时监控配额使用情况",
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/glm-plan-widget.git"
+  },
+  "keywords": [
+    "glm",
+    "zhipu",
+    "coding-plan",
+    "electron",
+    "widget",
+    "desktop",
+    "quota-monitor"
+  ],
   "type": "module",
   "main": "dist-electron/main.js",
+  "private": false,
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
