@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, RefreshCw, Clock, Activity, Settings, Save } from 'lucide-react';
+import { X, RefreshCw, Clock, Activity, Settings, Save, Minimize2 } from 'lucide-react';
 import { fetchUsageData } from './api';
 import type { UsageData, TimeRange } from './api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -14,6 +14,7 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem('glm_token') || '');
   const [baseUrl, setBaseUrl] = useState(localStorage.getItem('glm_baseUrl') || 'https://open.bigmodel.cn');
   const [timeRange, setTimeRange] = useState<TimeRange>((localStorage.getItem('glm_timeRange') as TimeRange) || 'today');
+  const [closeAction, setCloseAction] = useState<'minimize' | 'quit'>(localStorage.getItem('glm_closeAction') as 'minimize' | 'quit' || 'minimize');
   
   // Data state
   const [data, setData] = useState<UsageData>({
@@ -27,8 +28,19 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState<string>('--:--:--');
 
   const handleClose = () => {
-    if (window.electron) {
-      window.electron.closeWindow();
+    const action = localStorage.getItem('glm_closeAction') || 'minimize';
+    if (action === 'quit') {
+      if (window.electron && window.electron.quitApp) {
+        window.electron.quitApp();
+      } else {
+        window.close();
+      }
+    } else {
+      if (window.electron && window.electron.closeWindow) {
+        window.electron.closeWindow();
+      } else {
+        window.close();
+      }
     }
   };
 
@@ -117,12 +129,12 @@ function App() {
       <div className="flex-1 bg-white/70 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 flex flex-col overflow-hidden relative">
         
         {/* Header (Draggable) */}
-        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-500/90 to-indigo-600/90 text-white shadow-sm">
+        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-500/90 to-indigo-600/90 text-white shadow-sm" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
           <div className="flex items-center gap-2 font-medium tracking-wide">
             <Activity size={18} />
             <span className="text-sm">GLM Coding Plan</span>
           </div>
-          <div className="flex items-center gap-1.5 no-drag">
+          <div className="flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <button 
               onClick={() => setShowSettings(!showSettings)}
               className="p-1.5 hover:bg-white/20 rounded-lg transition-all"
@@ -140,9 +152,9 @@ function App() {
             <button 
               onClick={handleClose}
               className="p-1.5 hover:bg-red-500/80 rounded-lg transition-all"
-              title="关闭"
+              title={closeAction === 'minimize' ? '最小化到托盘' : '关闭应用'}
             >
-              <X size={15} />
+              {closeAction === 'minimize' ? <Minimize2 size={15} /> : <X size={15} />}
             </button>
           </div>
         </div>
@@ -184,6 +196,22 @@ function App() {
                   <option value="week">最近7天</option>
                   <option value="month">本月</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">关闭按钮行为</label>
+                <select 
+                  value={closeAction}
+                  onChange={(e) => {
+                    const val = e.target.value as 'minimize' | 'quit';
+                    setCloseAction(val);
+                    localStorage.setItem('glm_closeAction', val);
+                  }}
+                  className="w-full text-sm p-2 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                >
+                  <option value="minimize">最小化到托盘</option>
+                  <option value="quit">直接退出应用</option>
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">选择点击右上角按钮时的行为</p>
               </div>
               <button 
                 onClick={saveSettings}

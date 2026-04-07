@@ -1,103 +1,163 @@
-import { BrowserWindow as e, Menu as t, Tray as n, app as r, ipcMain as i, nativeImage as a } from "electron";
-import o from "node:path";
-import { fileURLToPath as s } from "node:url";
+import { BrowserWindow, Menu, Tray, app, ipcMain, nativeImage } from "electron";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 //#region electron/main.ts
-Object.defineProperty(r, "isQuitting", {
-	value: !1,
-	writable: !0
-});
-var c = o.dirname(s(import.meta.url));
-process.env.APP_ROOT = o.join(c, "..");
-var l = process.env.VITE_DEV_SERVER_URL, u = o.join(process.env.APP_ROOT, "dist-electron"), d = o.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = l ? o.join(process.env.APP_ROOT, "public") : d;
-var f, p;
-function m() {
-	f = new e({
+var __dirname = path.dirname(fileURLToPath(import.meta.url));
+process.env.APP_ROOT = path.join(__dirname, "..");
+var VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
+var MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
+var RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
+app.commandLine.appendSwitch("enable-logging");
+app.commandLine.appendSwitch("v", "0");
+var origConsoleError = console.error;
+console.error = (...args) => {
+	const msg = args.join(" ");
+	if (msg.includes("leveldb") || msg.includes("Session Storage") || msg.includes("Local Storage") || msg.includes(".TMP") || msg.includes("LOG.old")) return;
+	origConsoleError.apply(console, args);
+};
+var win = null;
+var tray = null;
+var isQuitting = false;
+function createWindow() {
+	win = new BrowserWindow({
 		width: 360,
 		height: 600,
 		type: "toolbar",
-		frame: !1,
-		transparent: !0,
-		resizable: !1,
-		alwaysOnTop: !1,
-		skipTaskbar: !0,
+		frame: false,
+		transparent: true,
+		resizable: false,
+		alwaysOnTop: false,
+		skipTaskbar: true,
 		webPreferences: {
-			preload: o.join(c, "preload.mjs"),
-			nodeIntegration: !1,
-			contextIsolation: !0,
-			webSecurity: !0
+			preload: path.join(__dirname, "preload.mjs"),
+			nodeIntegration: false,
+			contextIsolation: true,
+			webSecurity: true
 		}
-	}), f.on("close", (e) => {
-		r.isQuitting || (e.preventDefault(), f?.hide());
-	}), l ? f.loadURL(l) : f.loadFile(o.join(d, "index.html"));
+	});
+	win.on("close", (event) => {
+		if (!isQuitting) {
+			event.preventDefault();
+			win?.hide();
+		}
+	});
+	win.on("closed", () => {
+		win = null;
+	});
+	if (VITE_DEV_SERVER_URL) win.loadURL(VITE_DEV_SERVER_URL);
+	else win.loadFile(path.join(RENDERER_DIST, "index.html"));
 }
-function h() {
-	let e;
-	try {
-		let t = o.join(process.env.VITE_PUBLIC || o.join(c, "../public"), "tray-icon.svg");
-		if (e = a.createFromPath(t), e.isEmpty()) throw Error("Icon is empty");
-		e = e.resize({
-			width: 16,
-			height: 16
-		});
-	} catch {
-		console.log("Using generated icon for tray"), e = a.createEmpty();
+function createTrayIcon() {
+	const size = 16;
+	const bytesPerPixel = 4;
+	const buffer = Buffer.alloc(size * size * bytesPerPixel);
+	for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+		const idx = (y * size + x) * bytesPerPixel;
+		const cx = x - size / 2 + .5;
+		const cy = y - size / 2 + .5;
+		const dist = Math.sqrt(cx * cx + cy * cy);
+		if (dist <= 7) {
+			buffer[idx] = 59;
+			buffer[idx + 1] = 130;
+			buffer[idx + 2] = 246;
+			buffer[idx + 3] = 255;
+		} else if (dist <= 7.5) {
+			buffer[idx] = 59;
+			buffer[idx + 1] = 130;
+			buffer[idx + 2] = 246;
+			buffer[idx + 3] = 128;
+		} else {
+			buffer[idx] = 0;
+			buffer[idx + 1] = 0;
+			buffer[idx + 2] = 0;
+			buffer[idx + 3] = 0;
+		}
 	}
-	try {
-		e.isEmpty() && (e = a.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAADFJREFUOE9j/P///38GCgDjqAEMw8KQMDIwMAzEaQYjg9GAwWAwGAwGDAaDwWAwYDAAAMb7R/w+q9wXAAAAAElFTkSuQmCC")), p = new n(e);
-	} catch (e) {
-		console.error("Failed to create tray:", e);
-		return;
-	}
-	let i = t.buildFromTemplate([
+	return nativeImage.createFromBuffer(buffer, {
+		width: size,
+		height: size,
+		scaleFactor: 1
+	});
+}
+function createTray() {
+	const iconPath = path.join(process.env.VITE_PUBLIC || "", "tray-icon.png");
+	const icon = nativeImage.createFromPath(iconPath);
+	if (icon.isEmpty()) {
+		const fallbackIcon = createTrayIcon();
+		if (fallbackIcon.isEmpty()) return;
+		tray = new Tray(fallbackIcon);
+	} else tray = new Tray(icon);
+	const contextMenu = Menu.buildFromTemplate([
 		{
 			label: "显示小部件",
 			click: () => {
-				f ? f.show() : m();
+				if (win) {
+					win.show();
+					win.focus();
+				} else createWindow();
 			}
 		},
 		{
 			label: "隐藏小部件",
 			click: () => {
-				f && f.hide();
+				win?.hide();
 			}
 		},
 		{ type: "separator" },
 		{
 			label: "退出",
 			click: () => {
-				r.quit();
+				isQuitting = true;
+				app.quit();
 			}
 		}
 	]);
-	p.setToolTip("GLM Coding Plan Widget"), p.setContextMenu(i), p.on("click", () => {
-		f && (f.isVisible() ? f.hide() : f.show());
+	tray.setToolTip("GLM Coding Plan Widget");
+	tray.setContextMenu(contextMenu);
+	tray.on("click", () => {
+		if (win) if (win.isVisible()) win.hide();
+		else {
+			win.show();
+			win.focus();
+		}
 	});
 }
-r.on("window-all-closed", (e) => {
-	process.platform !== "darwin" && r.quit();
-}), r.on("before-quit", () => {
-	r.isQuitting = !0;
-}), r.on("activate", () => {
-	e.getAllWindows().length === 0 && m();
-}), r.whenReady().then(() => {
-	m(), h();
-}), i.on("close-window", () => {
-	f && f.hide();
-}), i.handle("fetch-api", async (e, t, n) => {
-	try {
-		let e = await fetch(t, n), r = await e.json();
-		return {
-			ok: e.ok,
-			status: e.status,
-			data: r
-		};
-	} catch (e) {
-		return {
-			ok: !1,
-			error: e.message
-		};
-	}
+app.on("window-all-closed", () => {
+	if (process.platform !== "darwin") app.quit();
+});
+app.on("before-quit", () => {
+	isQuitting = true;
+});
+app.on("activate", () => {
+	if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+app.whenReady().then(() => {
+	createWindow();
+	createTray();
+	ipcMain.on("close-window", () => {
+		if (win && win.isVisible()) win.hide();
+	});
+	ipcMain.on("quit-app", () => {
+		isQuitting = true;
+		app.quit();
+	});
+	ipcMain.handle("fetch-api", async (_event, url, options) => {
+		try {
+			const response = await fetch(url, options);
+			const data = await response.json();
+			return {
+				ok: response.ok,
+				status: response.status,
+				data
+			};
+		} catch (error) {
+			return {
+				ok: false,
+				error: error.message
+			};
+		}
+	});
 });
 //#endregion
-export { u as MAIN_DIST, d as RENDERER_DIST, l as VITE_DEV_SERVER_URL };
+export { MAIN_DIST, RENDERER_DIST, VITE_DEV_SERVER_URL };

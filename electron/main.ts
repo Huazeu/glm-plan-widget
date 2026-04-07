@@ -1,25 +1,9 @@
-import { app, BrowserWindow, ipcMain, net, Tray, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Declare app state
-declare global {
-  namespace NodeJS {
-    interface Process {
-      platform: string;
-    }
-  }
-}
-
-// Add isQuitting property to app
-Object.defineProperty(app, 'isQuitting', {
-  value: false,
-  writable: true
-});
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// The built directory structure
 process.env.APP_ROOT = path.join(__dirname, '..')
 
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
@@ -28,34 +12,46 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
-let win: BrowserWindow | null
-let tray: Tray | null
+// 彻底禁用 Chromium 磁盘日志，只允许控制台输出
+// 1. 将日志文件重定向到 NUL（Windows 空设备），防止写入 C 盘 AppData
+app.commandLine.appendSwitch('log-file', 'NUL')
+// 2. 设置日志级别为最低（3 = FATAL only），减少不必要的日志产生
+app.commandLine.appendSwitch('log-level', '3')
+// 3. 禁用 leveldb 的 verbose 日志
+app.commandLine.appendSwitch('enable-features', 'LeveldbUseDirectIO')
+
+let win: BrowserWindow | null = null
+let tray: Tray | null = null
+let isQuitting = false
 
 function createWindow() {
   win = new BrowserWindow({
     width: 360,
     height: 600,
-    type: 'toolbar', // Widget style
-    frame: false, // Frameless window
-    transparent: true, // Transparent background
+    type: 'toolbar',
+    frame: false,
+    transparent: true,
     resizable: false,
-    alwaysOnTop: false, // Allow it to be covered by other windows
-    skipTaskbar: true, // Don't show in taskbar since it's a widget/tray app
+    alwaysOnTop: false,
+    skipTaskbar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: true, // keep it secure
+      webSecurity: true,
     },
   })
 
   win.on('close', (event) => {
-    // Override default close behavior to hide instead
-    if (!app.isQuitting) {
-      event.preventDefault();
-      win?.hide();
+    if (!isQuitting) {
+      event.preventDefault()
+      win?.hide()
     }
-  });
+  })
+
+  win.on('closed', () => {
+    win = null
+  })
 
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
@@ -64,92 +60,112 @@ function createWindow() {
   }
 }
 
-function createTray() {
-  // We need to provide a reliable native icon or create one.
-  // Using an empty icon sometimes fails to render in Windows Tray.
-  // We will create a simple 16x16 icon programmatically with some color so it's visible.
-  
-  let icon;
-  try {
-    // Load the dedicated tray icon
-    const iconPath = path.join(process.env.VITE_PUBLIC || path.join(__dirname, '../public'), 'tray-icon.svg');
-    icon = nativeImage.createFromPath(iconPath);
-    if (icon.isEmpty()) {
-      throw new Error('Icon is empty');
+function createTrayIcon() {
+  const size = 16
+  const bytesPerPixel = 4
+  const buffer = Buffer.alloc(size * size * bytesPerPixel)
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = (y * size + x) * bytesPerPixel
+      const cx = x - size / 2 + 0.5
+      const cy = y - size / 2 + 0.5
+      const dist = Math.sqrt(cx * cx + cy * cy)
+
+      if (dist <= 7) {
+        buffer[idx] = 59
+        buffer[idx + 1] = 130
+        buffer[idx + 2] = 246
+        buffer[idx + 3] = 255
+      } else if (dist <= 7.5) {
+        buffer[idx] = 59
+        buffer[idx + 1] = 130
+        buffer[idx + 2] = 246
+        buffer[idx + 3] = 128
+      } else {
+        buffer[idx] = 0
+        buffer[idx + 1] = 0
+        buffer[idx + 2] = 0
+        buffer[idx + 3] = 0
+      }
     }
-    icon = icon.resize({ width: 16, height: 16 });
-  } catch (e) {
-    console.log('Using generated icon for tray');
-    // Fallback: Generate a small blue square icon programmatically 
-    // to ensure Windows actually renders it in the tray.
-    icon = nativeImage.createEmpty();
-    // This is just a fallback, it might still not show up if the OS strictly requires a real image buffer.
   }
 
-  // Windows specifically needs a valid image buffer or a valid path.
-  // We use a small blue square base64 PNG so it's visible in the tray.
-  try {
-    if (icon.isEmpty()) {
-      // 16x16 blue square PNG base64
-      const b64 = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAADFJREFUOE9j/P///38GCgDjqAEMw8KQMDIwMAzEaQYjg9GAwWAwGAwGDAaDwWAwYDAAAMb7R/w+q9wXAAAAAElFTkSuQmCC';
-      icon = nativeImage.createFromDataURL(`data:image/png;base64,${b64}`);
+  return nativeImage.createFromBuffer(buffer, {
+    width: size,
+    height: size,
+    scaleFactor: 1.0,
+  })
+}
+
+function createTray() {
+  // 使用预制的 tray-icon.png 替代动态生成的图标
+  // 动态 Buffer 图标在 Windows 上会出现颜色异常（显示为橙红色小圆点）
+  const iconPath = path.join(process.env.VITE_PUBLIC || '', 'tray-icon.png')
+  const icon = nativeImage.createFromPath(iconPath)
+
+  if (icon.isEmpty()) {
+    const fallbackIcon = createTrayIcon()
+    if (fallbackIcon.isEmpty()) {
+      return
     }
-    tray = new Tray(icon);
-  } catch (err) {
-    console.error('Failed to create tray:', err);
-    return;
+    tray = new Tray(fallbackIcon)
+  } else {
+    tray = new Tray(icon)
   }
-  
+
   const contextMenu = Menu.buildFromTemplate([
-    { 
-      label: '显示小部件', 
+    {
+      label: '显示小部件',
       click: () => {
         if (win) {
-          win.show();
+          win.show()
+          win.focus()
         } else {
-          createWindow();
+          createWindow()
         }
-      } 
+      }
     },
-    { 
-      label: '隐藏小部件', 
+    {
+      label: '隐藏小部件',
       click: () => {
-        if (win) win.hide();
-      } 
+        win?.hide()
+      }
     },
     { type: 'separator' },
-    { 
-      label: '退出', 
+    {
+      label: '退出',
       click: () => {
-        app.quit();
-      } 
+        isQuitting = true
+        app.quit()
+      }
     }
-  ]);
-  
-  tray.setToolTip('GLM Coding Plan Widget');
-  tray.setContextMenu(contextMenu);
+  ])
+
+  tray.setToolTip('GLM Coding Plan Widget')
+  tray.setContextMenu(contextMenu)
 
   tray.on('click', () => {
     if (win) {
       if (win.isVisible()) {
-        win.hide();
+        win.hide()
       } else {
-        win.show();
+        win.show()
+        win.focus()
       }
     }
-  });
+  })
 }
 
-// Prevent app from quitting when window is closed (default behavior)
-app.on('window-all-closed', (e: Event) => {
+app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
 app.on('before-quit', () => {
-  app.isQuitting = true;
-});
+  isQuitting = true
+})
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
@@ -160,22 +176,25 @@ app.on('activate', () => {
 app.whenReady().then(() => {
   createWindow()
   createTray()
-})
 
-// IPC endpoints for window controls
-ipcMain.on('close-window', () => {
-  if (win) {
-    win.hide(); // Hide to tray instead of quitting
-  }
-})
+  ipcMain.on('close-window', () => {
+    if (win && win.isVisible()) {
+      win.hide()
+    }
+  })
 
-// IPC endpoint to proxy HTTP requests to avoid CORS
-ipcMain.handle('fetch-api', async (event, url, options) => {
-  try {
-    const response = await fetch(url, options);
-    const data = await response.json();
-    return { ok: response.ok, status: response.status, data };
-  } catch (error: any) {
-    return { ok: false, error: error.message };
-  }
+  ipcMain.on('quit-app', () => {
+    isQuitting = true
+    app.quit()
+  })
+
+  ipcMain.handle('fetch-api', async (_event, url, options) => {
+    try {
+      const response = await fetch(url, options)
+      const data = await response.json()
+      return { ok: response.ok, status: response.status, data }
+    } catch (error: any) {
+      return { ok: false, error: error.message }
+    }
+  })
 })
